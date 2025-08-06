@@ -25,18 +25,16 @@ go get github.com/yclw/gf-casbin-adapter
 
 ## 数据库表结构
 
-适配器会自动创建以下表结构：
-
 ```sql
 CREATE TABLE casbin_rule (
     id    BIGINT AUTO_INCREMENT PRIMARY KEY,
-    ptype VARCHAR(255) DEFAULT '' NOT NULL,
-    v0    VARCHAR(255) DEFAULT '' NOT NULL,
-    v1    VARCHAR(255) DEFAULT '' NOT NULL,
-    v2    VARCHAR(255) DEFAULT '' NOT NULL,
-    v3    VARCHAR(255) DEFAULT '' NOT NULL,
-    v4    VARCHAR(255) DEFAULT '' NOT NULL,
-    v5    VARCHAR(255) DEFAULT '' NOT NULL,
+    ptype VARCHAR(100) DEFAULT '' NOT NULL,
+    v0    VARCHAR(100) DEFAULT '' NOT NULL,
+    v1    VARCHAR(100) DEFAULT '' NOT NULL,
+    v2    VARCHAR(100) DEFAULT '' NOT NULL,
+    v3    VARCHAR(100) DEFAULT '' NOT NULL,
+    v4    VARCHAR(100) DEFAULT '' NOT NULL,
+    v5    VARCHAR(100) DEFAULT '' NOT NULL,
     INDEX idx_ptype (ptype),
     INDEX idx_v0 (v0),
     INDEX idx_v1 (v1),
