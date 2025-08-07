@@ -74,14 +74,6 @@ func NewAdapterWithName(tableName string, isFiltered bool) *Adapter {
 	}
 }
 
-// NewAdapterWithNameAndColumns creates a new Adapter with a custom table name and columns.
-func NewAdapterWithNameAndColumns(tableName string, columns dao.CasbinRuleColumns, isFiltered bool) *Adapter {
-	return &Adapter{
-		dao:        dao.NewCasbinRuleDaoWithNameAndColumns(tableName, columns),
-		isFiltered: isFiltered,
-	}
-}
-
 // LoadPolicy loads all policy rules from the storage.
 func (a *Adapter) LoadPolicy(model model.Model) error {
 	return a.LoadPolicyCtx(context.Background(), model)

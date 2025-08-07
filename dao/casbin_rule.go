@@ -68,16 +68,6 @@ func NewCasbinRuleDaoWithName(tableName string, handlers ...gdb.ModelHandler) *C
 	}
 }
 
-// NewCasbinRuleDaoWithNameAndColumns creates and returns a new DAO object for table data access.
-func NewCasbinRuleDaoWithNameAndColumns(tableName string, columns CasbinRuleColumns, handlers ...gdb.ModelHandler) *CasbinRuleDao {
-	return &CasbinRuleDao{
-		group:    "default",
-		table:    tableName,
-		columns:  columns,
-		handlers: handlers,
-	}
-}
-
 // DB retrieves and returns the underlying raw database management object of the current DAO.
 func (dao *CasbinRuleDao) DB() gdb.DB {
 	return g.DB(dao.group)
