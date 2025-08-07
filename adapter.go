@@ -55,11 +55,29 @@ var (
 
 // Adapter represents the GoFrame adapter for policy storage.
 type Adapter struct {
+	dao        *dao.CasbinRuleDao
 	isFiltered bool
 }
 
 func NewAdapter(isFiltered bool) *Adapter {
 	return &Adapter{
+		dao:        dao.NewCasbinRuleDao(),
+		isFiltered: isFiltered,
+	}
+}
+
+// NewAdapterWithName creates a new Adapter with a custom table name.
+func NewAdapterWithName(tableName string, isFiltered bool) *Adapter {
+	return &Adapter{
+		dao:        dao.NewCasbinRuleDaoWithName(tableName),
+		isFiltered: isFiltered,
+	}
+}
+
+// NewAdapterWithNameAndColumns creates a new Adapter with a custom table name and columns.
+func NewAdapterWithNameAndColumns(tableName string, columns dao.CasbinRuleColumns, isFiltered bool) *Adapter {
+	return &Adapter{
+		dao:        dao.NewCasbinRuleDaoWithNameAndColumns(tableName, columns),
 		isFiltered: isFiltered,
 	}
 }
@@ -72,8 +90,8 @@ func (a *Adapter) LoadPolicy(model model.Model) error {
 // LoadPolicyCtx loads policy from database.
 func (a *Adapter) LoadPolicyCtx(ctx context.Context, model model.Model) error {
 	var lines []entity.CasbinRule
-	cols := dao.CasbinRule.Columns()
-	if err := dao.CasbinRule.Ctx(ctx).Order(cols.Id).Scan(&lines); err != nil {
+	cols := a.dao.Columns()
+	if err := a.dao.Ctx(ctx).Order(cols.Id).Scan(&lines); err != nil {
 		return err
 	}
 	err := a.preview(&lines, model)
@@ -101,9 +119,9 @@ func (a *Adapter) LoadFilteredPolicyCtx(ctx context.Context, model model.Model, 
 		return errors.New("invalid filter type")
 	}
 
-	cols := dao.CasbinRule.Columns()
+	cols := a.dao.Columns()
 	// Build query conditions
-	qs := dao.CasbinRule.Ctx(ctx)
+	qs := a.dao.Ctx(ctx)
 
 	// Apply filter conditions
 	a.applyFilter(qs, filterValue)
@@ -151,7 +169,7 @@ func (a *Adapter) SavePolicy(model model.Model) error {
 func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 	var err error
 
-	tx, err := dao.CasbinRule.DB().Begin(ctx)
+	tx, err := a.dao.DB().Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -169,7 +187,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
 			if len(lines) > flushEvery {
-				if _, err := dao.CasbinRule.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+				if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 					tx.Rollback()
 					return err
 				}
@@ -182,7 +200,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
 			if len(lines) > flushEvery {
-				if _, err := dao.CasbinRule.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+				if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 					tx.Rollback()
 					return err
 				}
@@ -191,7 +209,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		}
 	}
 	if len(lines) > 0 {
-		if _, err := dao.CasbinRule.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+		if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -209,7 +227,7 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 // AddPolicyCtx adds a policy rule to the storage.
 func (a *Adapter) AddPolicyCtx(ctx context.Context, sec string, ptype string, rule []string) error {
 	line := a.savePolicyLine(ptype, rule)
-	_, err := dao.CasbinRule.Ctx(ctx).Data(line).InsertIgnore()
+	_, err := a.dao.Ctx(ctx).Data(line).InsertIgnore()
 	return err
 }
 
@@ -227,7 +245,7 @@ func (a *Adapter) AddPoliciesCtx(ctx context.Context, sec string, ptype string, 
 		line := a.savePolicyLine(ptype, rule)
 		lines = append(lines, line)
 	}
-	_, err := dao.CasbinRule.Ctx(ctx).Data(lines).InsertIgnore()
+	_, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore()
 	return err
 }
 
@@ -241,7 +259,7 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 // This is part of the Auto-Save feature.
 func (a *Adapter) RemovePolicyCtx(ctx context.Context, sec string, ptype string, rule []string) error {
 	line := a.savePolicyLine(ptype, rule)
-	_, err := dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Delete()
+	_, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete()
 	return err
 }
 
@@ -254,10 +272,10 @@ func (a *Adapter) RemovePolicies(sec string, ptype string, rules [][]string) err
 // RemovePoliciesCtx removes policy rules from the storage.
 // This is part of the Auto-Save feature.
 func (a *Adapter) RemovePoliciesCtx(ctx context.Context, sec string, ptype string, rules [][]string) error {
-	err := dao.CasbinRule.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+	err := a.dao.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		for _, rule := range rules {
 			line := a.savePolicyLine(ptype, rule)
-			_, err := dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Delete()
+			_, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete()
 			if err != nil {
 				return err
 			}
@@ -281,7 +299,7 @@ func (a *Adapter) RemoveFilteredPolicyCtx(ctx context.Context, sec string, ptype
 
 	// If fieldIndex is -1, delete all policies with the specified ptype
 	if fieldIndex == -1 {
-		_, err := dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Delete()
+		_, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete()
 		return err
 	}
 
@@ -313,7 +331,7 @@ func (a *Adapter) RemoveFilteredPolicyCtx(ctx context.Context, sec string, ptype
 	}
 
 	// Execute delete operation
-	_, err = dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Delete()
+	_, err = a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete()
 	return err
 }
 
@@ -327,7 +345,7 @@ func (a *Adapter) UpdatePolicy(sec string, ptype string, oldRule, newRule []stri
 func (a *Adapter) UpdatePolicyCtx(ctx context.Context, sec string, ptype string, oldRule, newRule []string) error {
 	oldLine := a.savePolicyLine(ptype, oldRule)
 	newLine := a.savePolicyLine(ptype, newRule)
-	_, err := dao.CasbinRule.Ctx(ctx).Where(oldLine).OmitEmpty().Data(newLine).Update()
+	_, err := a.dao.Ctx(ctx).Where(oldLine).OmitEmpty().Data(newLine).Update()
 	return err
 }
 
@@ -338,7 +356,7 @@ func (a *Adapter) UpdatePolicies(sec string, ptype string, oldRules, newRules []
 
 // UpdatePoliciesCtx updates some policy rules to storage, like db, redis.
 func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype string, oldRules, newRules [][]string) error {
-	tx, err := dao.CasbinRule.DB().Begin(ctx)
+	tx, err := a.dao.DB().Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -353,7 +371,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 		newP = append(newP, a.savePolicyLine(ptype, newRule))
 	}
 
-	cols := dao.CasbinRule.Columns()
+	cols := a.dao.Columns()
 
 	// Batch delete old policies - first query IDs, then batch delete
 	if len(oldP) > 0 {
@@ -361,7 +379,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 		for _, oldLine := range oldP {
 			var ruleIds []int64
 			var arr []gdb.Value
-			if arr, err = dao.CasbinRule.Ctx(ctx).Where(oldLine).OmitEmpty().Array(cols.Id); err != nil {
+			if arr, err = a.dao.Ctx(ctx).Where(oldLine).OmitEmpty().Array(cols.Id); err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -371,7 +389,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 
 		// Batch delete using IDs
 		if len(idsToDelete) > 0 {
-			if _, err := dao.CasbinRule.Ctx(ctx).WhereIn(cols.Id, idsToDelete).Delete(); err != nil {
+			if _, err := a.dao.Ctx(ctx).WhereIn(cols.Id, idsToDelete).Delete(); err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -380,7 +398,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 
 	// Then add new policies
 	if len(newP) > 0 {
-		if _, err := dao.CasbinRule.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
+		if _, err := a.dao.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -425,27 +443,27 @@ func (a *Adapter) UpdateFilteredPoliciesCtx(ctx context.Context, sec string, pty
 	}
 
 	// Begin transaction
-	tx, err := dao.CasbinRule.DB().Begin(ctx)
+	tx, err := a.dao.DB().Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Query old policies to be deleted
 	var oldP []entity.CasbinRule
-	if err := dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Scan(&oldP); err != nil {
+	if err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Scan(&oldP); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// Delete old policies
-	if _, err := dao.CasbinRule.Ctx(ctx).Where(line).OmitEmpty().Delete(); err != nil {
+	if _, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete(); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// Batch add new policies
 	if len(newP) > 0 {
-		if _, err := dao.CasbinRule.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
+		if _, err := a.dao.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -468,8 +486,8 @@ func (a *Adapter) ClearPolicy() error {
 
 // truncateTable clears the table
 func (a *Adapter) truncateTable(ctx context.Context) error {
-	tableName := dao.CasbinRule.Table()
-	dbType := dao.CasbinRule.DB().GetConfig().Type
+	tableName := a.dao.Table()
+	dbType := a.dao.DB().GetConfig().Type
 
 	var sql string
 	switch dbType {
@@ -486,7 +504,7 @@ func (a *Adapter) truncateTable(ctx context.Context) error {
 	default:
 		sql = fmt.Sprintf("truncate table %s", tableName)
 	}
-	_, err := dao.CasbinRule.DB().Exec(ctx, sql)
+	_, err := a.dao.DB().Exec(ctx, sql)
 	return err
 }
 
@@ -602,7 +620,7 @@ func (a *Adapter) toStringPolicy(c entity.CasbinRule) []string {
 
 // applyFilter
 func (a *Adapter) applyFilter(qs *gdb.Model, filter Filter) {
-	cols := dao.CasbinRule.Columns()
+	cols := a.dao.Columns()
 
 	// Apply ptype filtering
 	if len(filter.Ptype) > 0 {

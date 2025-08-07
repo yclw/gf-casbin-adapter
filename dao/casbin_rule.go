@@ -11,18 +11,12 @@ import (
 	"github.com/gogf/gf/v2/frame/g"
 )
 
-// casbinRuleDao is the data access object for the table t_casbin_rule.
-// You can define custom methods on it to extend its functionality as needed.
-type casbinRuleDao struct {
-	*CasbinRuleDao
-}
-
 var (
-	// CasbinRule is a globally accessible object for table t_casbin_rule operations.
-	CasbinRule = casbinRuleDao{NewCasbinRuleDao()}
+	// CasbinRule is a globally accessible object for table casbin_rule operations.
+	DefaultCasbinRule = NewCasbinRuleDao()
 )
 
-// CasbinRuleDao is the data access object for the table t_casbin_rule.
+// CasbinRuleDao is the data access object for the table casbin_rule.
 type CasbinRuleDao struct {
 	table    string             // table is the underlying table name of the DAO.
 	group    string             // group is the database configuration group name of the current DAO.
@@ -30,7 +24,7 @@ type CasbinRuleDao struct {
 	handlers []gdb.ModelHandler // handlers for customized model modification.
 }
 
-// CasbinRuleColumns defines and stores column names for the table t_casbin_rule.
+// CasbinRuleColumns defines and stores column names for the table casbin_rule.
 type CasbinRuleColumns struct {
 	Id    string //
 	Ptype string //
@@ -42,7 +36,7 @@ type CasbinRuleColumns struct {
 	V5    string //
 }
 
-// casbinRuleColumns holds the columns for the table t_casbin_rule.
+// casbinRuleColumns holds the columns for the table casbin_rule.
 var casbinRuleColumns = CasbinRuleColumns{
 	Id:    "id",
 	Ptype: "ptype",
@@ -60,6 +54,26 @@ func NewCasbinRuleDao(handlers ...gdb.ModelHandler) *CasbinRuleDao {
 		group:    "default",
 		table:    "casbin_rule",
 		columns:  casbinRuleColumns,
+		handlers: handlers,
+	}
+}
+
+// NewCasbinRuleDaoWithName creates and returns a new DAO object for table data access.
+func NewCasbinRuleDaoWithName(tableName string, handlers ...gdb.ModelHandler) *CasbinRuleDao {
+	return &CasbinRuleDao{
+		group:    "default",
+		table:    tableName,
+		columns:  casbinRuleColumns,
+		handlers: handlers,
+	}
+}
+
+// NewCasbinRuleDaoWithNameAndColumns creates and returns a new DAO object for table data access.
+func NewCasbinRuleDaoWithNameAndColumns(tableName string, columns CasbinRuleColumns, handlers ...gdb.ModelHandler) *CasbinRuleDao {
+	return &CasbinRuleDao{
+		group:    "default",
+		table:    tableName,
+		columns:  columns,
 		handlers: handlers,
 	}
 }

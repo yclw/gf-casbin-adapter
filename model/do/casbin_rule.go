@@ -8,7 +8,7 @@ import (
 	"github.com/gogf/gf/v2/frame/g"
 )
 
-// CasbinRule is the golang structure of table t_casbin_rule for DAO operations like Where/Data.
+// CasbinRule is the golang structure of table casbin_rule for DAO operations like Where/Data.
 type CasbinRule struct {
 	g.Meta `orm:"table:casbin_rule, do:true"`
 	Id     interface{} //
