@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/yclw/gf-casbin-adapter/dao"
 	"github.com/yclw/gf-casbin-adapter/model/entity"
@@ -109,7 +110,11 @@ func NewAdapterWithName(tableName string, isFiltered bool) (*Adapter, error) {
 
 func (a *Adapter) createTable() error {
 	prefix := a.dao.DB().GetConfig().Prefix
-	sql := fmt.Sprintf(CreateTableSQL, prefix+a.dao.Table())
+	tableName := a.dao.Table()
+	if prefix != "" && !strings.HasPrefix(tableName, prefix) {
+		tableName = prefix + tableName
+	}
+	sql := fmt.Sprintf(CreateTableSQL, tableName)
 	_, err := a.dao.DB().Exec(context.Background(), sql)
 	return err
 }
