@@ -53,25 +53,65 @@ var (
 	_ persist.UpdatableAdapter = new(Adapter)
 )
 
+const (
+	CreateTableSQL = `
+	CREATE TABLE IF NOT EXISTS %s (
+		id BIGINT AUTO_INCREMENT PRIMARY KEY,
+		ptype VARCHAR(100) DEFAULT '' NOT NULL,
+		v0 VARCHAR(100) DEFAULT '' NOT NULL,
+		v1 VARCHAR(100) DEFAULT '' NOT NULL,
+		v2 VARCHAR(100) DEFAULT '' NOT NULL,
+		v3 VARCHAR(100) DEFAULT '' NOT NULL,
+		v4 VARCHAR(100) DEFAULT '' NOT NULL,
+		v5 VARCHAR(100) DEFAULT '' NOT NULL,
+		INDEX idx_ptype (ptype),
+		INDEX idx_v0 (v0),
+		INDEX idx_v1 (v1),
+		INDEX idx_v2 (v2),
+		INDEX idx_v3 (v3),
+		INDEX idx_v4 (v4),
+		INDEX idx_v5 (v5),
+		UNIQUE INDEX uniq_ptype_v0_v1_v2_v3_v4_v5 (ptype, v0, v1, v2, v3, v4, v5)
+	) COMMENT 'Casbin';
+	`
+)
+
 // Adapter represents the GoFrame adapter for policy storage.
 type Adapter struct {
 	dao        *dao.CasbinRuleDao
 	isFiltered bool
 }
 
-func NewAdapter(isFiltered bool) *Adapter {
-	return &Adapter{
+func NewAdapter(isFiltered bool) (*Adapter, error) {
+	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDao(),
 		isFiltered: isFiltered,
 	}
+	err := adapter.createTable()
+	if err != nil {
+		return nil, err
+	}
+	return adapter, nil
 }
 
 // NewAdapterWithName creates a new Adapter with a custom table name.
-func NewAdapterWithName(tableName string, isFiltered bool) *Adapter {
-	return &Adapter{
+func NewAdapterWithName(tableName string, isFiltered bool) (*Adapter, error) {
+	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDaoWithName(tableName),
 		isFiltered: isFiltered,
 	}
+	err := adapter.createTable()
+	if err != nil {
+		return nil, err
+	}
+	return adapter, nil
+}
+
+func (a *Adapter) createTable() error {
+	prefix := a.dao.DB().GetConfig().Prefix
+	sql := fmt.Sprintf(CreateTableSQL, prefix+a.dao.Table())
+	_, err := a.dao.DB().Exec(context.Background(), sql)
+	return err
 }
 
 // LoadPolicy loads all policy rules from the storage.
