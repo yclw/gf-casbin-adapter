@@ -1,0 +1,10 @@
+# Database. 配置参考：https://goframe.org/pages/viewpage.action?pageId=1114245
+database:
+  logger:
+    path: "logs/database"                       # 日志文件路径。默认为空，表示关闭，仅输出到终端
+    <<: *defaultLogger
+    stdout: true
+  default:
+    link: "mysql:root:root@tcp(127.0.0.1:3306)/ygpay?loc=Local&parseTime=true&charset=utf8mb4"
+    debug: true
+    prefix: "t_"

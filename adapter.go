@@ -77,16 +77,40 @@ const (
 	`
 )
 
+type UserFiltered bool
+
+const (
+	EnabledFiltered  UserFiltered = true
+	DisabledFiltered UserFiltered = false
+)
+
 // Adapter represents the GoFrame adapter for policy storage.
 type Adapter struct {
 	dao        *dao.CasbinRuleDao
-	isFiltered bool
+	isFiltered UserFiltered
 }
 
-func NewAdapter(isFiltered bool) (*Adapter, error) {
+// NewAdapter creates a new Adapter with default settings.
+// isFiltered is disabled by default.
+
+func NewAdapter() (*Adapter, error) {
 	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDao(),
-		isFiltered: isFiltered,
+		isFiltered: DisabledFiltered,
+	}
+	err := adapter.createTable()
+	if err != nil {
+		return nil, err
+	}
+	return adapter, nil
+}
+
+// NewAdapterWithFiltered creates a new Adapter with filtered enabled.
+// Table name is "casbin_rule" by default.
+func NewAdapterWithFiltered() (*Adapter, error) {
+	adapter := &Adapter{
+		dao:        dao.NewCasbinRuleDao(),
+		isFiltered: EnabledFiltered,
 	}
 	err := adapter.createTable()
 	if err != nil {
@@ -96,7 +120,7 @@ func NewAdapter(isFiltered bool) (*Adapter, error) {
 }
 
 // NewAdapterWithName creates a new Adapter with a custom table name.
-func NewAdapterWithName(tableName string, isFiltered bool) (*Adapter, error) {
+func NewAdapterWithName(tableName string, isFiltered UserFiltered) (*Adapter, error) {
 	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDaoWithName(tableName),
 		isFiltered: isFiltered,
@@ -169,7 +193,7 @@ func (a *Adapter) LoadFilteredPolicyCtx(ctx context.Context, model model.Model, 
 		return err
 	}
 
-	// Pre-check filter results
+	// Pre-check filter results to avoid duplicates
 	err := a.preview(&lines, model)
 	if err != nil {
 		return err
@@ -189,12 +213,12 @@ func (a *Adapter) LoadFilteredPolicyCtx(ctx context.Context, model model.Model, 
 
 // IsFiltered returns true if the loaded policy has been filtered.
 func (a *Adapter) IsFiltered() bool {
-	return a.isFiltered
+	return bool(a.isFiltered)
 }
 
 // IsFilteredCtx returns true if the loaded policy has been filtered.
 func (a *Adapter) IsFilteredCtx(ctx context.Context) bool {
-	return a.isFiltered
+	return bool(a.isFiltered)
 }
 
 // SavePolicy saves all policy rules to the storage.
@@ -655,13 +679,13 @@ func (a *Adapter) toStringPolicy(c entity.CasbinRule) []string {
 	return policy
 }
 
-// applyFilter
+// applyFilter applies filter conditions to the query by modifying the original query object
 func (a *Adapter) applyFilter(qs *gdb.Model, filter Filter) {
 	cols := a.dao.Columns()
 
 	// Apply ptype filtering
 	if len(filter.Ptype) > 0 {
-		qs.WhereIn(cols.Ptype, filter.Ptype)
+		*qs = *qs.WhereIn(cols.Ptype, filter.Ptype)
 	}
 
 	// Apply V0-V5 filter conditions
@@ -670,7 +694,7 @@ func (a *Adapter) applyFilter(qs *gdb.Model, filter Filter) {
 
 	for i, values := range filterValues {
 		if len(values) > 0 && i < len(filterFields) {
-			qs.WhereIn(filterFields[i], values)
+			*qs = *qs.WhereIn(filterFields[i], values)
 		}
 	}
 }
