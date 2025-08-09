@@ -14,6 +14,5 @@ CREATE TABLE casbin_rule (
     INDEX idx_v2 (v2),
     INDEX idx_v3 (v3),
     INDEX idx_v4 (v4),
-    INDEX idx_v5 (v5),
-    UNIQUE INDEX uniq_ptype_v0_v1_v2_v3_v4_v5 (ptype, v0, v1, v2, v3, v4, v5)
+    INDEX idx_v5 (v5)
 ) COMMENT 'Casbin';

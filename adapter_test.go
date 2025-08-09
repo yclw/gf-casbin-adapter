@@ -24,19 +24,6 @@ func testGetPolicy(t *testing.T, e *casbin.Enforcer, res [][]string) {
 	}
 }
 
-func testGetPolicyWithoutOrder(t *testing.T, e *casbin.Enforcer, res [][]string) {
-	myRes, err := e.GetPolicy()
-	if err != nil {
-		panic(err)
-	}
-
-	log.Print("Policy: ", myRes)
-
-	if !arrayEqualsWithoutOrder(myRes, res) {
-		t.Error("Policy: ", myRes, ", supposed to be ", res)
-	}
-}
-
 func arrayEqualsWithoutOrder(a [][]string, b [][]string) bool {
 	if len(a) != len(b) {
 		return false
@@ -257,7 +244,7 @@ func testUpdateFilteredPolicies(t *testing.T, a *Adapter) {
 	e.UpdateFilteredPolicies([][]string{{"alice", "data1", "write"}}, 0, "alice", "data1", "read")
 	e.UpdateFilteredPolicies([][]string{{"bob", "data2", "read"}}, 0, "bob", "data2", "write")
 	e.LoadPolicy()
-	testGetPolicyWithoutOrder(t, e, [][]string{{"alice", "data1", "write"}, {"data2_admin", "data2", "read"}, {"data2_admin", "data2", "write"}, {"bob", "data2", "read"}})
+	testGetPolicy(t, e, [][]string{{"alice", "data1", "write"}, {"data2_admin", "data2", "read"}, {"data2_admin", "data2", "write"}, {"bob", "data2", "read"}})
 }
 
 func TestAdapterWithCustomTable(t *testing.T) {
