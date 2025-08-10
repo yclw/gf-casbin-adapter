@@ -234,8 +234,8 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		return err
 	}
 
+	// Truncate the table to ensure no duplicates
 	err = a.truncateTable(ctx)
-
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -243,6 +243,8 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 
 	var lines []entity.CasbinRule
 	flushEvery := 1000
+
+	// Process p rules
 	for ptype, ast := range model["p"] {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
@@ -256,6 +258,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		}
 	}
 
+	// Process g rules
 	for ptype, ast := range model["g"] {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
@@ -268,6 +271,8 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 			}
 		}
 	}
+
+	// Insert remaining lines
 	if len(lines) > 0 {
 		if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 			tx.Rollback()
@@ -275,6 +280,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		}
 	}
 
+	// Commit the transaction
 	return tx.Commit()
 }
 
@@ -370,24 +376,13 @@ func (a *Adapter) RemoveFilteredPolicyCtx(ctx context.Context, sec string, ptype
 	}
 
 	// Set filter conditions based on fieldIndex and fieldValues
+	fields := []*string{&line.V0, &line.V1, &line.V2, &line.V3, &line.V4, &line.V5}
 	idx := fieldIndex + len(fieldValues)
-	if fieldIndex <= 0 && 0 < idx {
-		line.V0 = fieldValues[0-fieldIndex]
-	}
-	if fieldIndex <= 1 && 1 < idx {
-		line.V1 = fieldValues[1-fieldIndex]
-	}
-	if fieldIndex <= 2 && 2 < idx {
-		line.V2 = fieldValues[2-fieldIndex]
-	}
-	if fieldIndex <= 3 && 3 < idx {
-		line.V3 = fieldValues[3-fieldIndex]
-	}
-	if fieldIndex <= 4 && 4 < idx {
-		line.V4 = fieldValues[4-fieldIndex]
-	}
-	if fieldIndex <= 5 && 5 < idx {
-		line.V5 = fieldValues[5-fieldIndex]
+
+	for i := 0; i < len(fields); i++ {
+		if fieldIndex <= i && i < idx {
+			*fields[i] = fieldValues[i-fieldIndex]
+		}
 	}
 
 	// Execute delete operation
@@ -477,23 +472,14 @@ func (a *Adapter) UpdateFilteredPoliciesCtx(ctx context.Context, sec string, pty
 	line := &entity.CasbinRule{}
 	line.Ptype = ptype
 
-	if fieldIndex <= 0 && 0 < fieldIndex+len(fieldValues) {
-		line.V0 = fieldValues[0-fieldIndex]
-	}
-	if fieldIndex <= 1 && 1 < fieldIndex+len(fieldValues) {
-		line.V1 = fieldValues[1-fieldIndex]
-	}
-	if fieldIndex <= 2 && 2 < fieldIndex+len(fieldValues) {
-		line.V2 = fieldValues[2-fieldIndex]
-	}
-	if fieldIndex <= 3 && 3 < fieldIndex+len(fieldValues) {
-		line.V3 = fieldValues[3-fieldIndex]
-	}
-	if fieldIndex <= 4 && 4 < fieldIndex+len(fieldValues) {
-		line.V4 = fieldValues[4-fieldIndex]
-	}
-	if fieldIndex <= 5 && 5 < fieldIndex+len(fieldValues) {
-		line.V5 = fieldValues[5-fieldIndex]
+	// Set filter conditions based on fieldIndex and fieldValues
+	fields := []*string{&line.V0, &line.V1, &line.V2, &line.V3, &line.V4, &line.V5}
+	idx := fieldIndex + len(fieldValues)
+
+	for i := 0; i < len(fields); i++ {
+		if fieldIndex <= i && i < idx {
+			*fields[i] = fieldValues[i-fieldIndex]
+		}
 	}
 
 	// Prepare new policy data
@@ -573,13 +559,7 @@ func loadPolicyLine(line entity.CasbinRule, model model.Model) error {
 	var p = []string{line.Ptype,
 		line.V0, line.V1, line.V2,
 		line.V3, line.V4, line.V5}
-
-	index := len(p) - 1
-	for p[index] == "" {
-		index--
-	}
-	index += 1
-	p = p[:index]
+	p = p[:findLastNonEmptyIndex(p)]
 	err := persist.LoadPolicyArray(p, model)
 	if err != nil {
 		return err
@@ -594,12 +574,7 @@ func (a *Adapter) preview(rules *[]entity.CasbinRule, model model.Model) error {
 		r := []string{rule.Ptype,
 			rule.V0, rule.V1, rule.V2,
 			rule.V3, rule.V4, rule.V5}
-		index := len(r) - 1
-		for r[index] == "" {
-			index--
-		}
-		index += 1
-		p := r[:index]
+		p := r[:findLastNonEmptyIndex(r)]
 		key := p[0]
 		sec := key[:1]
 		ok, err := model.HasPolicyEx(sec, key, p[1:])
@@ -616,26 +591,15 @@ func (a *Adapter) preview(rules *[]entity.CasbinRule, model model.Model) error {
 }
 
 func (a *Adapter) savePolicyLine(ptype string, rule []string) entity.CasbinRule {
-	line := &entity.CasbinRule{}
+	line := &entity.CasbinRule{
+		Ptype: ptype,
+	}
 
-	line.Ptype = ptype
-	if len(rule) > 0 {
-		line.V0 = rule[0]
-	}
-	if len(rule) > 1 {
-		line.V1 = rule[1]
-	}
-	if len(rule) > 2 {
-		line.V2 = rule[2]
-	}
-	if len(rule) > 3 {
-		line.V3 = rule[3]
-	}
-	if len(rule) > 4 {
-		line.V4 = rule[4]
-	}
-	if len(rule) > 5 {
-		line.V5 = rule[5]
+	fields := []*string{&line.V0, &line.V1, &line.V2, &line.V3, &line.V4, &line.V5}
+	for i, field := range fields {
+		if i < len(rule) {
+			*field = rule[i]
+		}
 	}
 
 	return *line
@@ -653,27 +617,13 @@ func (a *Adapter) checkQueryField(fieldValues []string) error {
 
 // toStringPolicy converts CasbinRule to string policy array
 func (a *Adapter) toStringPolicy(c entity.CasbinRule) []string {
-	policy := make([]string, 0)
-	if c.Ptype != "" {
-		policy = append(policy, c.Ptype)
-	}
-	if c.V0 != "" {
-		policy = append(policy, c.V0)
-	}
-	if c.V1 != "" {
-		policy = append(policy, c.V1)
-	}
-	if c.V2 != "" {
-		policy = append(policy, c.V2)
-	}
-	if c.V3 != "" {
-		policy = append(policy, c.V3)
-	}
-	if c.V4 != "" {
-		policy = append(policy, c.V4)
-	}
-	if c.V5 != "" {
-		policy = append(policy, c.V5)
+	fields := []string{c.Ptype, c.V0, c.V1, c.V2, c.V3, c.V4, c.V5}
+	policy := make([]string, 0, len(fields))
+
+	for _, field := range fields {
+		if field != "" {
+			policy = append(policy, field)
+		}
 	}
 	return policy
 }
@@ -696,4 +646,14 @@ func (a *Adapter) applyFilter(qs *gdb.Model, filter Filter) {
 			*qs = *qs.WhereIn(filterFields[i], values)
 		}
 	}
+}
+
+// findLastNonEmptyIndex finds the last non-empty index in a slice of strings
+func findLastNonEmptyIndex(fields []string) int {
+	for i := len(fields) - 1; i >= 0; i-- {
+		if fields[i] != "" {
+			return i + 1
+		}
+	}
+	return 0
 }
