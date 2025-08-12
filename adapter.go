@@ -12,6 +12,7 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	"github.com/gogf/gf/v2/database/gdb"
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/util/gconv"
 )
 
@@ -120,6 +121,10 @@ func NewAdapterWithFiltered() (*Adapter, error) {
 
 // NewAdapterWithName creates a new Adapter with a custom table name.
 func NewAdapterWithName(tableName string, isFiltered UserFiltered) (*Adapter, error) {
+	prefix := g.DB().GetConfig().Prefix
+	if prefix != "" && !strings.HasPrefix(tableName, prefix) {
+		tableName = prefix + tableName
+	}
 	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDaoWithName(tableName),
 		isFiltered: isFiltered,
@@ -235,7 +240,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 	}
 
 	// Truncate the table to ensure no duplicates
-	err = a.truncateTable(ctx)
+	err = a.truncateTableWithTx(ctx, tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -249,7 +254,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
 			if len(lines) > flushEvery {
-				if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+				if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 					tx.Rollback()
 					return err
 				}
@@ -263,7 +268,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 		for _, rule := range ast.Policy {
 			lines = append(lines, a.savePolicyLine(ptype, rule))
 			if len(lines) > flushEvery {
-				if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+				if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 					tx.Rollback()
 					return err
 				}
@@ -274,7 +279,7 @@ func (a *Adapter) SavePolicyCtx(ctx context.Context, model model.Model) error {
 
 	// Insert remaining lines
 	if len(lines) > 0 {
-		if _, err := a.dao.Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
+		if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Data(lines).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -341,7 +346,7 @@ func (a *Adapter) RemovePoliciesCtx(ctx context.Context, sec string, ptype strin
 	err := a.dao.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		for _, rule := range rules {
 			line := a.savePolicyLine(ptype, rule)
-			_, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete()
+			_, err := tx.Model(a.dao.Table()).Ctx(ctx).Where(line).OmitEmpty().Delete()
 			if err != nil {
 				return err
 			}
@@ -434,7 +439,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 		for _, oldLine := range oldP {
 			var ruleIds []int64
 			var arr []gdb.Value
-			if arr, err = a.dao.Ctx(ctx).Where(oldLine).OmitEmpty().Array(cols.Id); err != nil {
+			if arr, err = tx.Model(a.dao.Table()).Ctx(ctx).Where(oldLine).OmitEmpty().Array(cols.Id); err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -444,7 +449,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 
 		// Batch delete using IDs
 		if len(idsToDelete) > 0 {
-			if _, err := a.dao.Ctx(ctx).WhereIn(cols.Id, idsToDelete).Delete(); err != nil {
+			if _, err := tx.Model(a.dao.Table()).Ctx(ctx).WhereIn(cols.Id, idsToDelete).Delete(); err != nil {
 				tx.Rollback()
 				return err
 			}
@@ -453,7 +458,7 @@ func (a *Adapter) UpdatePoliciesCtx(ctx context.Context, sec string, ptype strin
 
 	// Then add new policies
 	if len(newP) > 0 {
-		if _, err := a.dao.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
+		if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -496,20 +501,20 @@ func (a *Adapter) UpdateFilteredPoliciesCtx(ctx context.Context, sec string, pty
 
 	// Query old policies to be deleted
 	var oldP []entity.CasbinRule
-	if err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Scan(&oldP); err != nil {
+	if err := tx.Model(a.dao.Table()).Ctx(ctx).Where(line).OmitEmpty().Scan(&oldP); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// Delete old policies
-	if _, err := a.dao.Ctx(ctx).Where(line).OmitEmpty().Delete(); err != nil {
+	if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Where(line).OmitEmpty().Delete(); err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
 	// Batch add new policies
 	if len(newP) > 0 {
-		if _, err := a.dao.Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
+		if _, err := tx.Model(a.dao.Table()).Ctx(ctx).Data(newP).InsertIgnore(); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -525,13 +530,8 @@ func (a *Adapter) UpdateFilteredPoliciesCtx(ctx context.Context, sec string, pty
 	return oldPolicies, tx.Commit()
 }
 
-// ClearPolicy clears all current policy in all instances
-func (a *Adapter) ClearPolicy() error {
-	return a.truncateTable(context.Background())
-}
-
-// truncateTable clears the table
-func (a *Adapter) truncateTable(ctx context.Context) error {
+// truncateTableWithTx clears the table within a transaction
+func (a *Adapter) truncateTableWithTx(ctx context.Context, tx gdb.TX) error {
 	tableName := a.dao.Table()
 	dbType := a.dao.DB().GetConfig().Type
 
@@ -550,7 +550,7 @@ func (a *Adapter) truncateTable(ctx context.Context) error {
 	default:
 		sql = fmt.Sprintf("truncate table %s", tableName)
 	}
-	_, err := a.dao.DB().Exec(ctx, sql)
+	_, err := tx.Ctx(ctx).Exec(sql)
 	return err
 }
 
