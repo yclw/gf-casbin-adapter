@@ -55,28 +55,6 @@ var (
 	_ persist.UpdatableAdapter = new(Adapter)
 )
 
-const (
-	CreateTableSQL = `
-	CREATE TABLE IF NOT EXISTS %s (
-		id BIGINT AUTO_INCREMENT PRIMARY KEY,
-		ptype VARCHAR(100) DEFAULT '' NOT NULL,
-		v0 VARCHAR(100) DEFAULT '' NOT NULL,
-		v1 VARCHAR(100) DEFAULT '' NOT NULL,
-		v2 VARCHAR(100) DEFAULT '' NOT NULL,
-		v3 VARCHAR(100) DEFAULT '' NOT NULL,
-		v4 VARCHAR(100) DEFAULT '' NOT NULL,
-		v5 VARCHAR(100) DEFAULT '' NOT NULL,
-		INDEX idx_ptype (ptype),
-		INDEX idx_v0 (v0),
-		INDEX idx_v1 (v1),
-		INDEX idx_v2 (v2),
-		INDEX idx_v3 (v3),
-		INDEX idx_v4 (v4),
-		INDEX idx_v5 (v5)
-	) COMMENT 'Casbin';
-	`
-)
-
 type UserFiltered bool
 
 const (
@@ -98,10 +76,6 @@ func NewAdapter() (*Adapter, error) {
 		dao:        dao.NewCasbinRuleDao(),
 		isFiltered: DisabledFiltered,
 	}
-	err := adapter.createTable()
-	if err != nil {
-		return nil, err
-	}
 	return adapter, nil
 }
 
@@ -111,10 +85,6 @@ func NewAdapterWithFiltered() (*Adapter, error) {
 	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDao(),
 		isFiltered: EnabledFiltered,
-	}
-	err := adapter.createTable()
-	if err != nil {
-		return nil, err
 	}
 	return adapter, nil
 }
@@ -129,22 +99,7 @@ func NewAdapterWithName(tableName string, isFiltered UserFiltered) (*Adapter, er
 		dao:        dao.NewCasbinRuleDaoWithName(tableName),
 		isFiltered: isFiltered,
 	}
-	err := adapter.createTable()
-	if err != nil {
-		return nil, err
-	}
 	return adapter, nil
-}
-
-func (a *Adapter) createTable() error {
-	prefix := a.dao.DB().GetConfig().Prefix
-	tableName := a.dao.Table()
-	if prefix != "" && !strings.HasPrefix(tableName, prefix) {
-		tableName = prefix + tableName
-	}
-	sql := fmt.Sprintf(CreateTableSQL, tableName)
-	_, err := a.dao.DB().Exec(context.Background(), sql)
-	return err
 }
 
 // LoadPolicy loads all policy rules from the storage.
