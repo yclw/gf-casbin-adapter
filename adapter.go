@@ -62,10 +62,29 @@ const (
 	DisabledFiltered UserFiltered = false
 )
 
+var EnabledCreate bool = true
+
 // Adapter represents the GoFrame adapter for policy storage.
 type Adapter struct {
 	dao        *dao.CasbinRuleDao
 	isFiltered UserFiltered
+}
+
+func EnableCreateTable(enabled bool) {
+	EnabledCreate = enabled
+}
+
+func createTable(dbType string, tableName string) error {
+	if !EnabledCreate {
+		return nil
+	}
+	ctx := context.Background()
+	sql := GetCreateTableSQLByTemplate(dbType, tableName)
+	if sql == "" {
+		return errors.New("invalid db type")
+	}
+	_, err := g.DB().Exec(ctx, sql)
+	return err
 }
 
 // NewAdapter creates a new Adapter with default settings.
@@ -86,6 +105,10 @@ func NewAdapterWithFiltered() (*Adapter, error) {
 		dao:        dao.NewCasbinRuleDao(),
 		isFiltered: EnabledFiltered,
 	}
+	err := createTable(g.DB().GetConfig().Type, adapter.dao.Table())
+	if err != nil {
+		return nil, err
+	}
 	return adapter, nil
 }
 
@@ -98,6 +121,10 @@ func NewAdapterWithName(tableName string, isFiltered UserFiltered) (*Adapter, er
 	adapter := &Adapter{
 		dao:        dao.NewCasbinRuleDaoWithName(tableName),
 		isFiltered: isFiltered,
+	}
+	err := createTable(g.DB().GetConfig().Type, tableName)
+	if err != nil {
+		return nil, err
 	}
 	return adapter, nil
 }
@@ -490,13 +517,14 @@ func (a *Adapter) truncateTableWithTx(ctx context.Context, tx gdb.TX) error {
 	tableName := a.dao.Table()
 	dbType := a.dao.DB().GetConfig().Type
 
+	// mysql, mariadb, sqlite, mssql, pgsql, oracle, clickhouse, dm.
 	var sql string
 	switch dbType {
 	case "sqlite":
 		sql = fmt.Sprintf("delete from %s", tableName)
 	case "sqlite3":
 		sql = fmt.Sprintf("delete from %s", tableName)
-	case "postgres":
+	case "pgsql":
 		sql = fmt.Sprintf("truncate table %s RESTART IDENTITY", tableName)
 	case "sqlserver":
 		sql = fmt.Sprintf("truncate table %s", tableName)
